@@ -4,8 +4,8 @@ import { Wallet, TrendingUp } from "lucide-react";
 
 interface BalanceCardProps {
   balance: number;
-  balanceUsd: number;
-  tokenPrice: number;
+  balanceUsd?: number | null;
+  tokenPrice?: number | null;
   chain: {
     id: string;
     name: string;
@@ -13,20 +13,23 @@ interface BalanceCardProps {
   };
 }
 
-export function BalanceCard({ balance, balanceUsd = 0, tokenPrice = 0, chain }: BalanceCardProps) {
+export function BalanceCard({ balance, balanceUsd, tokenPrice, chain }: BalanceCardProps) {
+  const safeBalanceUsd = balanceUsd ?? 0;
+  const safeTokenPrice = tokenPrice ?? 0;
+
   const formattedBalance = balance.toLocaleString("en-US", {
     minimumFractionDigits: 4,
     maximumFractionDigits: 4,
   });
 
-  const formattedUsd = balanceUsd.toLocaleString("en-US", {
+  const formattedUsd = safeBalanceUsd.toLocaleString("en-US", {
     style: "currency",
     currency: "USD",
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
 
-  const formattedPrice = tokenPrice.toLocaleString("en-US", {
+  const formattedPrice = safeTokenPrice.toLocaleString("en-US", {
     style: "currency",
     currency: "USD",
     minimumFractionDigits: 2,
