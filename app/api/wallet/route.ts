@@ -13,10 +13,10 @@ export const SUPPORTED_CHAINS = {
   },
   polygon: {
     name: "Polygon",
-    symbol: "MATIC",
+    symbol: "POL",
     alchemyUrl: `https://polygon-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`,
     explorer: "https://polygonscan.com",
-    coingeckoId: "matic-network",
+    coingeckoId: "polygon-ecosystem-token",
   },
   arbitrum: {
     name: "Arbitrum",

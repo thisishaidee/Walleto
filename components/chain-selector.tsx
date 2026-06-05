@@ -5,7 +5,7 @@ import { useState, useRef, useEffect } from "react";
 
 export const CHAINS = [
   { id: "ethereum", name: "Ethereum", symbol: "ETH", color: "#627EEA" },
-  { id: "polygon", name: "Polygon", symbol: "MATIC", color: "#8247E5" },
+  { id: "polygon", name: "Polygon", symbol: "POL", color: "#8247E5" },
   { id: "arbitrum", name: "Arbitrum", symbol: "ETH", color: "#28A0F0" },
   { id: "optimism", name: "Optimism", symbol: "ETH", color: "#FF0420" },
   { id: "base", name: "Base", symbol: "ETH", color: "#0052FF" },
