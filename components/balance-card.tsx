@@ -13,7 +13,7 @@ interface BalanceCardProps {
   };
 }
 
-export function BalanceCard({ balance, balanceUsd, tokenPrice, chain }: BalanceCardProps) {
+export function BalanceCard({ balance, balanceUsd = 0, tokenPrice = 0, chain }: BalanceCardProps) {
   const formattedBalance = balance.toLocaleString("en-US", {
     minimumFractionDigits: 4,
     maximumFractionDigits: 4,

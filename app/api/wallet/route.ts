@@ -51,10 +51,26 @@ async function getTokenPrice(coingeckoId: string): Promise<number> {
   try {
     const response = await fetch(
       `https://api.coingecko.com/api/v3/simple/price?ids=${coingeckoId}&vs_currencies=usd`,
-      { next: { revalidate: 60 } } // Cache for 60 seconds
+      { 
+        next: { revalidate: 60 },
+        headers: {
+          "Accept": "application/json",
+        }
+      }
     );
+    
+    if (!response.ok) {
+      return 0;
+    }
+    
     const data = await response.json();
-    return data[coingeckoId]?.usd || 0;
+    
+    const price = data[coingeckoId]?.usd;
+    if (typeof price === "number") {
+      return price;
+    }
+    
+    return 0;
   } catch {
     return 0;
   }

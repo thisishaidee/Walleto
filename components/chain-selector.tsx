@@ -4,11 +4,11 @@ import { ChevronDown } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 
 export const CHAINS = [
-  { id: "ethereum", name: "Ethereum", symbol: "ETH", color: "#627EEA" },
-  { id: "polygon", name: "Polygon", symbol: "POL", color: "#8247E5" },
-  { id: "arbitrum", name: "Arbitrum", symbol: "ETH", color: "#28A0F0" },
-  { id: "optimism", name: "Optimism", symbol: "ETH", color: "#FF0420" },
-  { id: "base", name: "Base", symbol: "ETH", color: "#0052FF" },
+  { id: "ethereum", name: "Ethereum", symbol: "ETH", color: "#627EEA", explorer: "https://etherscan.io" },
+  { id: "polygon", name: "Polygon", symbol: "POL", color: "#8247E5", explorer: "https://polygonscan.com" },
+  { id: "arbitrum", name: "Arbitrum", symbol: "ETH", color: "#28A0F0", explorer: "https://arbiscan.io" },
+  { id: "optimism", name: "Optimism", symbol: "ETH", color: "#FF0420", explorer: "https://optimistic.etherscan.io" },
+  { id: "base", name: "Base", symbol: "ETH", color: "#0052FF", explorer: "https://basescan.org" },
 ] as const;
 
 export type ChainId = (typeof CHAINS)[number]["id"];
