@@ -1,14 +1,67 @@
 import { NextRequest, NextResponse } from "next/server";
 
 const ALCHEMY_API_KEY = process.env.ALCHEMY_API_KEY;
-const ALCHEMY_BASE_URL = `https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`;
+
+// Supported chains with their Alchemy network URLs and native tokens
+export const SUPPORTED_CHAINS = {
+  ethereum: {
+    name: "Ethereum",
+    symbol: "ETH",
+    alchemyUrl: `https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`,
+    explorer: "https://etherscan.io",
+    coingeckoId: "ethereum",
+  },
+  polygon: {
+    name: "Polygon",
+    symbol: "MATIC",
+    alchemyUrl: `https://polygon-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`,
+    explorer: "https://polygonscan.com",
+    coingeckoId: "matic-network",
+  },
+  arbitrum: {
+    name: "Arbitrum",
+    symbol: "ETH",
+    alchemyUrl: `https://arb-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`,
+    explorer: "https://arbiscan.io",
+    coingeckoId: "ethereum",
+  },
+  optimism: {
+    name: "Optimism",
+    symbol: "ETH",
+    alchemyUrl: `https://opt-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`,
+    explorer: "https://optimistic.etherscan.io",
+    coingeckoId: "ethereum",
+  },
+  base: {
+    name: "Base",
+    symbol: "ETH",
+    alchemyUrl: `https://base-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`,
+    explorer: "https://basescan.org",
+    coingeckoId: "ethereum",
+  },
+} as const;
+
+export type ChainId = keyof typeof SUPPORTED_CHAINS;
 
 function isValidEthereumAddress(address: string): boolean {
   return /^0x[a-fA-F0-9]{40}$/.test(address);
 }
 
-async function getEthBalance(address: string): Promise<number> {
-  const response = await fetch(ALCHEMY_BASE_URL, {
+async function getTokenPrice(coingeckoId: string): Promise<number> {
+  try {
+    const response = await fetch(
+      `https://api.coingecko.com/api/v3/simple/price?ids=${coingeckoId}&vs_currencies=usd`,
+      { next: { revalidate: 60 } } // Cache for 60 seconds
+    );
+    const data = await response.json();
+    return data[coingeckoId]?.usd || 0;
+  } catch {
+    return 0;
+  }
+}
+
+async function getBalance(address: string, alchemyUrl: string): Promise<number> {
+  const response = await fetch(alchemyUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -25,7 +78,6 @@ async function getEthBalance(address: string): Promise<number> {
     throw new Error(data.error.message);
   }
 
-  // Convert from wei (hex) to ETH
   const balanceWei = BigInt(data.result);
   const balanceEth = Number(balanceWei) / 1e18;
   return balanceEth;
@@ -49,10 +101,9 @@ interface Transaction {
   time: string;
 }
 
-async function getTransactions(address: string): Promise<Transaction[]> {
-  // Get both incoming and outgoing transfers
+async function getTransactions(address: string, alchemyUrl: string): Promise<Transaction[]> {
   const [incomingResponse, outgoingResponse] = await Promise.all([
-    fetch(ALCHEMY_BASE_URL, {
+    fetch(alchemyUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -72,7 +123,7 @@ async function getTransactions(address: string): Promise<Transaction[]> {
         ],
       }),
     }),
-    fetch(ALCHEMY_BASE_URL, {
+    fetch(alchemyUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -102,10 +153,8 @@ async function getTransactions(address: string): Promise<Transaction[]> {
   const incomingTransfers: AlchemyTransfer[] = incomingData.result?.transfers || [];
   const outgoingTransfers: AlchemyTransfer[] = outgoingData.result?.transfers || [];
 
-  // Combine and format transactions
   const allTransfers = [...incomingTransfers, ...outgoingTransfers];
 
-  // Remove duplicates based on hash
   const uniqueTransfers = allTransfers.reduce((acc, transfer) => {
     if (!acc.find((t) => t.hash === transfer.hash)) {
       acc.push(transfer);
@@ -113,7 +162,6 @@ async function getTransactions(address: string): Promise<Transaction[]> {
     return acc;
   }, [] as AlchemyTransfer[]);
 
-  // Sort by timestamp (newest first) and take top 10
   const sortedTransfers = uniqueTransfers
     .sort(
       (a, b) =>
@@ -134,6 +182,8 @@ async function getTransactions(address: string): Promise<Transaction[]> {
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const address = searchParams.get("address");
+  const chainParam = searchParams.get("chain") || "ethereum";
+  const chain = chainParam as ChainId;
 
   if (!ALCHEMY_API_KEY) {
     return NextResponse.json(
@@ -156,16 +206,36 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  if (!SUPPORTED_CHAINS[chain]) {
+    return NextResponse.json(
+      { error: "Unsupported chain" },
+      { status: 400 }
+    );
+  }
+
+  const chainConfig = SUPPORTED_CHAINS[chain];
+
   try {
-    const [balance, transactions] = await Promise.all([
-      getEthBalance(address),
-      getTransactions(address),
+    const [balance, transactions, tokenPrice] = await Promise.all([
+      getBalance(address, chainConfig.alchemyUrl),
+      getTransactions(address, chainConfig.alchemyUrl),
+      getTokenPrice(chainConfig.coingeckoId),
     ]);
+
+    const balanceUsd = balance * tokenPrice;
 
     return NextResponse.json({
       address,
       balance,
+      balanceUsd,
+      tokenPrice,
       transactions,
+      chain: {
+        id: chain,
+        name: chainConfig.name,
+        symbol: chainConfig.symbol,
+        explorer: chainConfig.explorer,
+      },
     });
   } catch (error) {
     console.error("Error fetching wallet data:", error);

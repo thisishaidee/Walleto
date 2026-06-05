@@ -5,9 +5,10 @@ import { useState } from "react";
 
 interface WalletHeaderProps {
   address: string;
+  explorerUrl?: string;
 }
 
-export function WalletHeader({ address }: WalletHeaderProps) {
+export function WalletHeader({ address, explorerUrl = "https://etherscan.io" }: WalletHeaderProps) {
   const [copied, setCopied] = useState(false);
 
   const copyToClipboard = async () => {
@@ -45,11 +46,11 @@ export function WalletHeader({ address }: WalletHeaderProps) {
               )}
             </button>
             <a
-              href={`https://etherscan.io/address/${address}`}
+              href={`${explorerUrl}/address/${address}`}
               target="_blank"
               rel="noopener noreferrer"
               className="p-1.5 rounded-md hover:bg-secondary transition-colors"
-              title="View on Etherscan"
+              title="View on Explorer"
             >
               <ExternalLink className="h-4 w-4 text-muted-foreground" />
             </a>

@@ -13,17 +13,24 @@ interface Transaction {
 interface TransactionListProps {
   transactions: Transaction[];
   walletAddress: string;
+  explorerUrl?: string;
+  symbol?: string;
 }
 
-export function TransactionList({ transactions, walletAddress }: TransactionListProps) {
+export function TransactionList({ 
+  transactions, 
+  walletAddress, 
+  explorerUrl = "https://etherscan.io",
+  symbol = "ETH"
+}: TransactionListProps) {
   const truncateHash = (hash: string) => `${hash.slice(0, 10)}...${hash.slice(-8)}`;
   const truncateAddress = (addr: string) => `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 
   const formatValue = (value: string) => {
     const num = parseFloat(value);
-    if (num === 0) return "0 ETH";
-    if (num < 0.0001) return "< 0.0001 ETH";
-    return `${num.toLocaleString("en-US", { maximumFractionDigits: 4 })} ETH`;
+    if (num === 0) return `0 ${symbol}`;
+    if (num < 0.0001) return `< 0.0001 ${symbol}`;
+    return `${num.toLocaleString("en-US", { maximumFractionDigits: 4 })} ${symbol}`;
   };
 
   const formatTime = (time: string) => {
@@ -106,11 +113,11 @@ export function TransactionList({ transactions, walletAddress }: TransactionList
                         {truncateHash(tx.hash)}
                       </span>
                       <a
-                        href={`https://etherscan.io/tx/${tx.hash}`}
+                        href={`${explorerUrl}/tx/${tx.hash}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="p-1 rounded hover:bg-secondary transition-colors"
-                        title="View on Etherscan"
+                        title="View on Explorer"
                       >
                         <ExternalLink className="h-3 w-3 text-muted-foreground" />
                       </a>

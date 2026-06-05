@@ -2,12 +2,13 @@
 
 import useSWR from "swr";
 import Link from "next/link";
-import { use } from "react";
+import { use, useState } from "react";
 import { ArrowLeft, Wallet, AlertCircle, RefreshCw } from "lucide-react";
 import { WalletHeader } from "@/components/wallet-header";
 import { BalanceCard } from "@/components/balance-card";
 import { TransactionList } from "@/components/transaction-list";
 import { BalanceCardSkeleton, TransactionListSkeleton } from "@/components/skeletons";
+import { ChainSelector, type ChainId, CHAINS } from "@/components/chain-selector";
 
 interface Transaction {
   hash: string;
@@ -17,10 +18,20 @@ interface Transaction {
   time: string;
 }
 
+interface ChainInfo {
+  id: string;
+  name: string;
+  symbol: string;
+  explorer: string;
+}
+
 interface WalletData {
   address: string;
   balance: number;
+  balanceUsd: number;
+  tokenPrice: number;
   transactions: Transaction[];
+  chain: ChainInfo;
 }
 
 const fetcher = (url: string) => fetch(url).then((res) => {
@@ -36,14 +47,21 @@ export default function WalletPage({
   params: Promise<{ address: string }>;
 }) {
   const { address } = use(params);
+  const [selectedChain, setSelectedChain] = useState<ChainId>("ethereum");
   
   const { data, error, isLoading, mutate } = useSWR<WalletData>(
-    `/api/wallet?address=${address}`,
+    `/api/wallet?address=${address}&chain=${selectedChain}`,
     fetcher,
     {
       revalidateOnFocus: false,
     }
   );
+
+  const handleChainChange = (chain: ChainId) => {
+    setSelectedChain(chain);
+  };
+
+  const chainConfig = CHAINS.find((c) => c.id === selectedChain) || CHAINS[0];
 
   return (
     <main className="min-h-screen flex flex-col">
@@ -65,21 +83,30 @@ export default function WalletPage({
               <span className="font-semibold text-foreground">EVM Tracker</span>
             </div>
           </div>
-          <button
-            onClick={() => mutate()}
-            disabled={isLoading}
-            className="p-2 rounded-lg hover:bg-secondary transition-colors disabled:opacity-50"
-            title="Refresh data"
-          >
-            <RefreshCw className={`h-5 w-5 text-muted-foreground ${isLoading ? "animate-spin" : ""}`} />
-          </button>
+          <div className="flex items-center gap-2">
+            <ChainSelector
+              selectedChain={selectedChain}
+              onChainChange={handleChainChange}
+            />
+            <button
+              onClick={() => mutate()}
+              disabled={isLoading}
+              className="p-2 rounded-lg hover:bg-secondary transition-colors disabled:opacity-50"
+              title="Refresh data"
+            >
+              <RefreshCw className={`h-5 w-5 text-muted-foreground ${isLoading ? "animate-spin" : ""}`} />
+            </button>
+          </div>
         </div>
       </header>
 
       <div className="flex-1 max-w-6xl mx-auto w-full px-4 py-8">
         {/* Wallet Header */}
         <div className="mb-8">
-          <WalletHeader address={address} />
+          <WalletHeader 
+            address={address} 
+            explorerUrl={data?.chain.explorer || chainConfig.explorer || "https://etherscan.io"} 
+          />
         </div>
 
         {/* Error State */}
@@ -116,10 +143,17 @@ export default function WalletPage({
         {/* Success State */}
         {data && !error && (
           <div className="grid gap-6">
-            <BalanceCard balance={data.balance} />
+            <BalanceCard 
+              balance={data.balance} 
+              balanceUsd={data.balanceUsd}
+              tokenPrice={data.tokenPrice}
+              chain={data.chain}
+            />
             <TransactionList
               transactions={data.transactions}
               walletAddress={address}
+              explorerUrl={data.chain.explorer}
+              symbol={data.chain.symbol}
             />
           </div>
         )}
@@ -129,7 +163,7 @@ export default function WalletPage({
       <footer className="border-t border-border py-6 px-4 mt-auto">
         <div className="max-w-6xl mx-auto flex items-center justify-between text-sm text-muted-foreground">
           <span>EVM Wallet Tracker</span>
-          <span>Powered by Ethereum</span>
+          <span>5 Chains Supported</span>
         </div>
       </footer>
     </main>
