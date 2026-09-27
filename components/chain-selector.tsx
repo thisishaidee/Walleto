@@ -37,7 +37,7 @@ export function ChainSelector({ selectedChain, onChainChange }: ChainSelectorPro
         <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${isOpen ? "rotate-180" : ""}`} />
       </button>
       {isOpen && (
-        <div className="absolute top-full mt-2 right-0 w-48 rounded-lg border border-border bg-card shadow-lg z-50 overflow-hidden">
+        <div className="absolute top-full mt-2 right-0 w-52 max-h-80 overflow-y-auto rounded-lg border border-border bg-card shadow-lg z-50">
           {CHAINS.map((chain) => (
             <button
               key={chain.id}

@@ -9,7 +9,7 @@ import { WalletHeader } from "@/components/wallet-header";
 import { BalanceCard } from "@/components/balance-card";
 import { TransactionList } from "@/components/transaction-list";
 import { ActionTiles } from "@/components/action-tiles";
-import { BrandMark, BrandWordmark } from "@/components/brand-mark";
+import { BrandLockup } from "@/components/brand-mark";
 import { BalanceCardSkeleton, TransactionListSkeleton } from "@/components/skeletons";
 import { ChainSelector, type ChainId } from "@/components/chain-selector";
 import { parseWalletAddress } from "@/lib/address";
@@ -61,19 +61,18 @@ function WalletView({
   const { data, error, isLoading, mutate } = useSWR<WalletData>(
     address ? `/api/wallet?address=${encodeURIComponent(address)}&chain=${selectedChain}` : null,
     fetcher,
-    { revalidateOnFocus: false }
+    { revalidateOnFocus: true, dedupingInterval: 8000 }
   );
 
   return (
     <main className="min-h-screen flex flex-col">
       <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm">
-        <div className="max-w-xl mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Link href="/" className="p-2 rounded-full hover:bg-secondary" title="Back">
+        <div className="max-w-xl mx-auto px-4 py-4 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <Link href="/" className="p-2 rounded-full hover:bg-secondary shrink-0" title="Back">
               <ArrowLeft className="h-5 w-5 text-muted-foreground" />
             </Link>
-            <BrandMark className="h-8 w-8" />
-            <BrandWordmark className="text-lg hidden sm:inline" />
+            <BrandLockup />
           </div>
           <ChainSelector
             selectedChain={selectedChain}
