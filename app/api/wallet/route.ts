@@ -87,32 +87,36 @@ async function alchemyTransfers(
   direction: "from" | "to",
   category: string[]
 ) {
-  const params: Record<string, unknown> = {
-    fromBlock: "0x0",
-    toBlock: "latest",
-    category,
-    maxCount: "0x64",
-    order: "desc",
-    withMetadata: true,
-    excludeZeroValue: false,
-  };
-  if (direction === "from") params.fromAddress = address;
-  else params.toAddress = address;
+  try {
+    const params: Record<string, unknown> = {
+      fromBlock: "0x0",
+      toBlock: "latest",
+      category,
+      maxCount: "0x64",
+      order: "desc",
+      withMetadata: true,
+      excludeZeroValue: false,
+    };
+    if (direction === "from") params.fromAddress = address;
+    else params.toAddress = address;
 
-  const data = await readJson(
-    await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        jsonrpc: "2.0",
-        id: 1,
-        method: "alchemy_getAssetTransfers",
-        params: [params],
-      }),
-    })
-  );
-  if (data.error) throw new Error(data.error.message ?? "Transfer lookup failed");
-  return (data.result?.transfers ?? []) as AlchemyTransfer[];
+    const data = await readJson(
+      await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "alchemy_getAssetTransfers",
+          params: [params],
+        }),
+      })
+    );
+    if (data.error) return [] as AlchemyTransfer[];
+    return (data.result?.transfers ?? []) as AlchemyTransfer[];
+  } catch {
+    return [] as AlchemyTransfer[];
+  }
 }
 
 async function getTransfers(address: string, url: string) {
