@@ -3,6 +3,10 @@ import { formatEther, parseWalletAddress } from "@/lib/address";
 import { alchemyUrl, getChain, isChainId } from "@/lib/chains";
 import { getCached, rateLimit, setCached } from "@/lib/rate-limit";
 
+const PAGE_SIZE = "0x3e8";
+const MAX_PAGES = 4;
+const MAX_SHOWN = 800;
+
 export type Transaction = {
   hash: string;
   from: string;
@@ -21,6 +25,7 @@ export type WalletPayload = {
   tokenPrice: number | null;
   priceUnavailable: boolean;
   transactions: Transaction[];
+  historyTruncated: boolean;
   chain: {
     id: string;
     name: string;
@@ -86,37 +91,49 @@ async function alchemyTransfers(
   url: string,
   direction: "from" | "to",
   category: string[]
-) {
-  try {
-    const params: Record<string, unknown> = {
-      fromBlock: "0x0",
-      toBlock: "latest",
-      category,
-      maxCount: "0x64",
-      order: "desc",
-      withMetadata: true,
-      excludeZeroValue: false,
-    };
-    if (direction === "from") params.fromAddress = address;
-    else params.toAddress = address;
+): Promise<{ transfers: AlchemyTransfer[]; truncated: boolean }> {
+  const transfers: AlchemyTransfer[] = [];
+  let pageKey: string | undefined;
+  let truncated = false;
 
-    const data = await readJson(
-      await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          jsonrpc: "2.0",
-          id: 1,
-          method: "alchemy_getAssetTransfers",
-          params: [params],
-        }),
-      })
-    );
-    if (data.error) return [] as AlchemyTransfer[];
-    return (data.result?.transfers ?? []) as AlchemyTransfer[];
+  try {
+    for (let page = 0; page < MAX_PAGES; page += 1) {
+      const params: Record<string, unknown> = {
+        fromBlock: "0x0",
+        toBlock: "latest",
+        category,
+        maxCount: PAGE_SIZE,
+        order: "desc",
+        withMetadata: true,
+        excludeZeroValue: false,
+      };
+      if (direction === "from") params.fromAddress = address;
+      else params.toAddress = address;
+      if (pageKey) params.pageKey = pageKey;
+
+      const data = await readJson(
+        await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            jsonrpc: "2.0",
+            id: 1,
+            method: "alchemy_getAssetTransfers",
+            params: [params],
+          }),
+        })
+      );
+      if (data.error) break;
+      transfers.push(...((data.result?.transfers ?? []) as AlchemyTransfer[]));
+      pageKey = data.result?.pageKey as string | undefined;
+      if (!pageKey) return { transfers, truncated: false };
+    }
+    truncated = Boolean(pageKey);
   } catch {
-    return [] as AlchemyTransfer[];
+    return { transfers, truncated };
   }
+
+  return { transfers, truncated };
 }
 
 async function getTransfers(address: string, url: string) {
@@ -126,7 +143,19 @@ async function getTransfers(address: string, url: string) {
     alchemyTransfers(address, url, "to", ["erc20"]),
     alchemyTransfers(address, url, "from", ["erc20"]),
   ]);
-  return [...inNative, ...outNative, ...inToken, ...outToken];
+  return {
+    transfers: [
+      ...inNative.transfers,
+      ...outNative.transfers,
+      ...inToken.transfers,
+      ...outToken.transfers,
+    ],
+    truncated:
+      inNative.truncated ||
+      outNative.truncated ||
+      inToken.truncated ||
+      outToken.truncated,
+  };
 }
 
 function mapTransfers(transfers: AlchemyTransfer[], fallbackSymbol: string): Transaction[] {
@@ -152,13 +181,11 @@ function mapTransfers(transfers: AlchemyTransfer[], fallbackSymbol: string): Tra
     });
   }
 
-  return mapped
-    .sort((a, b) => {
-      const ta = a.time ? new Date(a.time).getTime() : 0;
-      const tb = b.time ? new Date(b.time).getTime() : 0;
-      return tb - ta;
-    })
-    .slice(0, 40);
+  return mapped.sort((a, b) => {
+    const ta = a.time ? new Date(a.time).getTime() : 0;
+    const tb = b.time ? new Date(b.time).getTime() : 0;
+    return tb - ta;
+  });
 }
 
 export async function GET(request: NextRequest) {
@@ -197,12 +224,14 @@ export async function GET(request: NextRequest) {
   const url = alchemyUrl(chain.alchemyNetwork, apiKey);
 
   try {
-    const [balance, transfers, tokenPrice] = await Promise.all([
+    const [balance, transferResult, tokenPrice] = await Promise.all([
       getBalance(address, url),
       getTransfers(address, url),
       getTokenPrice(chain.coingeckoId),
     ]);
 
+    const mapped = mapTransfers(transferResult.transfers, chain.symbol);
+    const historyTruncated = transferResult.truncated || mapped.length > MAX_SHOWN;
     const balanceNumber = Number(balance);
     const payload: WalletPayload = {
       address,
@@ -210,7 +239,8 @@ export async function GET(request: NextRequest) {
       balanceUsd: tokenPrice == null ? null : balanceNumber * tokenPrice,
       tokenPrice,
       priceUnavailable: tokenPrice == null,
-      transactions: mapTransfers(transfers, chain.symbol),
+      transactions: mapped.slice(0, MAX_SHOWN),
+      historyTruncated,
       chain: {
         id: chain.id,
         name: chain.name,
@@ -219,7 +249,7 @@ export async function GET(request: NextRequest) {
       },
     };
 
-    setCached(cacheKey, payload, 15_000);
+    setCached(cacheKey, payload, 20_000);
     return NextResponse.json(payload);
   } catch (error) {
     console.error("Error fetching wallet data:", error);
