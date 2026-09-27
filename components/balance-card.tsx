@@ -1,7 +1,5 @@
 "use client";
 
-import { Wallet, TrendingUp } from "lucide-react";
-
 interface BalanceCardProps {
   balance: string;
   balanceUsd: number | null;
@@ -28,7 +26,7 @@ export function BalanceCard({
 
   const formattedUsd =
     balanceUsd == null
-      ? "Price unavailable"
+      ? "—"
       : balanceUsd.toLocaleString("en-US", {
           style: "currency",
           currency: "USD",
@@ -47,34 +45,19 @@ export function BalanceCard({
         });
 
   return (
-    <div className="relative overflow-hidden rounded-xl border border-border bg-card p-6">
-      <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent pointer-events-none" />
-      <div className="relative">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-lg bg-primary/10">
-              <Wallet className="h-5 w-5 text-primary" />
-            </div>
-            <span className="text-sm font-medium text-muted-foreground">Available balance</span>
-          </div>
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-secondary text-xs text-muted-foreground">
-            <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-            {chain.name}
-          </div>
-        </div>
-
-        <div className="flex items-baseline gap-2 mb-2">
-          <span className="text-4xl font-bold text-foreground tracking-tight">{formattedUsd}</span>
-        </div>
-        <div className="text-lg font-medium text-muted-foreground mb-4">
-          {formattedBalance} {chain.symbol}
-        </div>
-        {!priceUnavailable && (
-          <div className="pt-4 border-t border-border flex items-center gap-2 text-sm text-muted-foreground">
-            <TrendingUp className="h-4 w-4" />
-            <span>1 {chain.symbol} = {formattedPrice}</span>
-          </div>
-        )}
+    <div className="rounded-[28px] bg-gradient-to-br from-[#E8D7F4] via-[#F4ECF8] to-[#F6F1EA] border border-[#e4d7c8] p-6 sm:p-8">
+      <p className="text-[11px] tracking-[0.2em] uppercase text-muted-foreground text-center">Available balance</p>
+      <p className="mt-3 text-center text-4xl sm:text-5xl font-semibold tracking-tight text-foreground">
+        {priceUnavailable ? "Price unavailable" : formattedUsd}
+      </p>
+      <p className="mt-2 text-center text-muted-foreground">
+        {formattedBalance} {chain.symbol}
+      </p>
+      <div className="mt-5 flex justify-center">
+        <span className="px-3 py-1 rounded-full bg-white/60 text-xs text-muted-foreground">
+          {chain.name}
+          {!priceUnavailable && ` · 1 ${chain.symbol} = ${formattedPrice}`}
+        </span>
       </div>
     </div>
   );

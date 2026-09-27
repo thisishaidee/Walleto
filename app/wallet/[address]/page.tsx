@@ -1,14 +1,15 @@
 "use client";
 
 import useSWR from "swr";
-import Image from "next/image";
 import Link from "next/link";
-import { use, useMemo } from "react";
+import { Suspense, use } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, AlertCircle, RefreshCw } from "lucide-react";
+import { ArrowLeft, AlertCircle } from "lucide-react";
 import { WalletHeader } from "@/components/wallet-header";
 import { BalanceCard } from "@/components/balance-card";
 import { TransactionList } from "@/components/transaction-list";
+import { ActionTiles } from "@/components/action-tiles";
+import { BrandMark, BrandWordmark } from "@/components/brand-mark";
 import { BalanceCardSkeleton, TransactionListSkeleton } from "@/components/skeletons";
 import { ChainSelector, type ChainId } from "@/components/chain-selector";
 import { parseWalletAddress } from "@/lib/address";
@@ -45,12 +46,11 @@ const fetcher = (url: string) =>
     return body;
   });
 
-export default function WalletPage({
-  params,
+function WalletView({
+  rawAddress,
 }: {
-  params: Promise<{ address: string }>;
+  rawAddress: string;
 }) {
-  const { address: rawAddress } = use(params);
   const searchParams = useSearchParams();
   const router = useRouter();
   const address = parseWalletAddress(rawAddress);
@@ -64,81 +64,56 @@ export default function WalletPage({
     { revalidateOnFocus: false }
   );
 
-  const handleChainChange = (chain: ChainId) => {
-    if (!address) return;
-    router.replace(`/wallet/${address}?chain=${chain}`);
-  };
-
-  const invalid = useMemo(() => !address, [address]);
-
   return (
     <main className="min-h-screen flex flex-col">
-      <header className="border-b border-border sticky top-0 bg-background/80 backdrop-blur-sm z-10">
-        <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link href="/" className="p-2 rounded-lg hover:bg-secondary transition-colors" title="Back to search">
+      <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm">
+        <div className="max-w-xl mx-auto px-4 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Link href="/" className="p-2 rounded-full hover:bg-secondary" title="Back">
               <ArrowLeft className="h-5 w-5 text-muted-foreground" />
             </Link>
-            <div className="flex items-center gap-3">
-              <Image src="/walleto-mark.svg" alt="" width={32} height={32} className="rounded-md" />
-              <span className="font-medium lowercase tracking-wide text-foreground">walleto</span>
-            </div>
+            <BrandMark className="h-8 w-8" />
+            <BrandWordmark className="text-lg hidden sm:inline" />
           </div>
-          <div className="flex items-center gap-2">
-            <ChainSelector selectedChain={selectedChain} onChainChange={handleChainChange} />
-            <button
-              onClick={() => mutate()}
-              disabled={isLoading || invalid}
-              className="p-2 rounded-lg hover:bg-secondary transition-colors disabled:opacity-50"
-              title="Refresh data"
-            >
-              <RefreshCw className={`h-5 w-5 text-muted-foreground ${isLoading ? "animate-spin" : ""}`} />
-            </button>
-          </div>
+          <ChainSelector
+            selectedChain={selectedChain}
+            onChainChange={(chain) => address && router.replace(`/wallet/${address}?chain=${chain}`)}
+          />
         </div>
       </header>
 
-      <div className="flex-1 max-w-6xl mx-auto w-full px-4 py-8">
-        {invalid ? (
-          <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-6">
+      <div className="flex-1 max-w-xl mx-auto w-full px-4 py-6 space-y-5">
+        {!address ? (
+          <div className="rounded-2xl border border-destructive/30 bg-destructive/10 p-6">
             <h3 className="font-semibold mb-2">Invalid address</h3>
             <p className="text-sm text-muted-foreground">That URL is not a valid Ethereum address.</p>
           </div>
         ) : (
           <>
-            <div className="mb-8">
-              <WalletHeader address={address} explorerUrl={data?.chain.explorer || chainConfig.explorer} />
-            </div>
-
+            <WalletHeader address={address} explorerUrl={data?.chain.explorer || chainConfig.explorer} />
+            <ActionTiles
+              address={address}
+              explorerUrl={data?.chain.explorer || chainConfig.explorer}
+              onRefresh={() => mutate()}
+              refreshing={isLoading}
+            />
             {error && (
-              <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-6 flex items-start gap-4">
-                <div className="p-2 rounded-lg bg-destructive/20">
-                  <AlertCircle className="h-5 w-5 text-destructive" />
-                </div>
+              <div className="rounded-2xl border border-destructive/30 bg-destructive/10 p-5 flex gap-3">
+                <AlertCircle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
                 <div>
-                  <h3 className="font-semibold text-foreground mb-1">Failed to load wallet data</h3>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    {error.message || "There was an error fetching data for this wallet."}
-                  </p>
-                  <button
-                    onClick={() => mutate()}
-                    className="px-4 py-2 bg-destructive text-destructive-foreground rounded-lg text-sm font-medium"
-                  >
-                    Try Again
-                  </button>
+                  <p className="font-medium">Could not load this wallet</p>
+                  <p className="text-sm text-muted-foreground mt-1">{error.message}</p>
                 </div>
               </div>
             )}
-
-            {isLoading && !error && (
-              <div className="grid gap-6">
+            {isLoading && !data && (
+              <div className="grid gap-5">
                 <BalanceCardSkeleton />
                 <TransactionListSkeleton />
               </div>
             )}
-
-            {data && !error && (
-              <div className="grid gap-6">
+            {data && (
+              <>
                 <BalanceCard
                   balance={data.balance}
                   balanceUsd={data.balanceUsd}
@@ -152,11 +127,24 @@ export default function WalletPage({
                   explorerUrl={data.chain.explorer}
                   symbol={data.chain.symbol}
                 />
-              </div>
+              </>
             )}
           </>
         )}
       </div>
     </main>
+  );
+}
+
+export default function WalletPage({
+  params,
+}: {
+  params: Promise<{ address: string }>;
+}) {
+  const { address } = use(params);
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-background" />}>
+      <WalletView rawAddress={address} />
+    </Suspense>
   );
 }
