@@ -1,7 +1,6 @@
-export function BrandMark({ className = "h-9 w-9" }: { className?: string }) {
+export function BrandMark({ className = "h-8 w-8" }: { className?: string }) {
   return (
-    <svg viewBox="0 0 256 256" className={className} aria-hidden>
-      <rect width="256" height="256" rx="48" fill="#F3EEE6" />
+    <svg viewBox="40 52 176 152" className={className} aria-hidden>
       <g transform="translate(56 68)">
         <path d="M0 0 L72 0 L0 88 Z" fill="#C9B6E4" />
         <path d="M8 28 L86 0 L62 120 L0 120 Z" fill="#D4C4EE" />
@@ -15,11 +14,24 @@ export function BrandMark({ className = "h-9 w-9" }: { className?: string }) {
   );
 }
 
-export function BrandWordmark({ className = "text-[28px]" }: { className?: string }) {
+export function BrandWordmark({ className = "text-[26px]" }: { className?: string }) {
   return (
-    <span className={`lowercase tracking-[0.04em] text-foreground font-medium ${className}`}>
+    <span className={`inline-flex items-center lowercase tracking-[0.03em] leading-none text-foreground font-medium ${className}`}>
       wallet
-      <span className="inline-block ml-[2px] h-[0.72em] w-[0.72em] rounded-full border-[2.5px] border-current align-[-1px]" />
+      <span
+        aria-hidden
+        className="ml-[3px] inline-block shrink-0 rounded-full border-[2.25px] border-current"
+        style={{ width: "0.78em", height: "0.78em", transform: "translateY(0.02em)" }}
+      />
     </span>
+  );
+}
+
+export function BrandLockup() {
+  return (
+    <div className="flex items-center gap-2.5">
+      <BrandMark className="h-8 w-8 shrink-0" />
+      <BrandWordmark className="text-[24px] sm:text-[26px]" />
+    </div>
   );
 }
