@@ -10,25 +10,11 @@ const geistMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
-  title: 'EVM Wallet Tracker',
-  description: 'Track any Ethereum wallet - View balances and transactions',
-  generator: 'v0.app',
+  title: 'walleto',
+  description: 'Track any EVM wallet — balances and transfers across five chains.',
   icons: {
-    icon: [
-      {
-        url: '/icon-light-32x32.png',
-        media: '(prefers-color-scheme: light)',
-      },
-      {
-        url: '/icon-dark-32x32.png',
-        media: '(prefers-color-scheme: dark)',
-      },
-      {
-        url: '/icon.svg',
-        type: 'image/svg+xml',
-      },
-    ],
-    apple: '/apple-icon.png',
+    icon: '/walleto-mark.svg',
+    apple: '/walleto-mark.svg',
   },
 }
 
