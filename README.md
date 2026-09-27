@@ -1,6 +1,6 @@
 # walleto
 
-Read-only EVM wallet tracker. Look up an address, see native balance + USD, and the latest native and ERC-20 transfers.
+Read-only EVM wallet tracker. Look up an address, see native balance + USD, and native + ERC-20 transfer history.
 
 No private keys. No send. No swap. Nothing in this app can move funds.
 
@@ -27,18 +27,21 @@ Enable each network on the same Alchemy app as your key.
 
 ## Transaction history
 
-History is **not** limited by calendar days.
+History is **not** a day window. Alchemy is queried from genesis to latest, newest first, and pages are followed.
 
-Alchemy is queried from genesis (`fromBlock: 0`) to latest, **newest first**. Each lookup pulls up to 100 incoming + 100 outgoing native transfers and 100 incoming + 100 outgoing ERC-20 transfers, then the UI shows the **40 most recent** after merge.
+Each lookup walks up to 4 pages of 1,000 transfers for:
 
-So:
+- incoming native (external + internal)
+- outgoing native
+- incoming ERC-20
+- outgoing ERC-20
 
-- A transfer from today shows if it is among those newest events on the **selected chain**.
-- A transfer from months ago still shows if the wallet is quiet.
-- A very active wallet may only show the latest ~40 events, even if older activity exists.
-- Activity on another chain will not appear until you switch the chain in the header.
+Those are merged, de-duplicated, sorted newest first, and the UI shows up to **800** events.
 
-Timestamps render in the viewer’s local time (`Today`, `Yesterday`, or date + time).
+Quiet wallets: you should see almost everything on that chain, including old transfers.
+Very active wallets: you still get a deep slice (thousands fetched, 800 shown). Full lifetime history of a bot/MEV wallet is not loaded in one request because Vercel would time out.
+
+Switch chain in the header to see that chain’s history. Timestamps use the viewer’s local time.
 
 ## Setup
 
@@ -69,7 +72,7 @@ pnpm dev
 
 Project: `walleto` (team Haidee). Production URL: `walletoo.vercel.app`.
 
-Environment variable on the **walleto** project (not `moniq`):
+Environment variable on the **walleto** project:
 
 - `ALCHEMY_KEY` or `ALCHEMY_API_KEY`
 - Production (Preview too if you want branch deploys to work)
