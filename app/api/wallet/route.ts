@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { formatEther } from "viem";
-import { parseWalletAddress } from "@/lib/address";
+import { formatEther, parseWalletAddress } from "@/lib/address";
 import { alchemyUrl, getChain, isChainId } from "@/lib/chains";
 import { getCached, rateLimit, setCached } from "@/lib/rate-limit";
 
