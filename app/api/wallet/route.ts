@@ -162,7 +162,7 @@ function mapTransfers(transfers: AlchemyTransfer[], fallbackSymbol: string): Tra
 }
 
 export async function GET(request: NextRequest) {
-  const apiKey = process.env.ALCHEMY_API_KEY;
+  const apiKey = process.env.ALCHEMY_API_KEY || process.env.ALCHEMY_KEY;
   if (!apiKey) {
     return NextResponse.json(
       { error: "Alchemy key is not set on this deployment. Add ALCHEMY_API_KEY in Vercel." },
