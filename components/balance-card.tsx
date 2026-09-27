@@ -3,9 +3,10 @@
 import { Wallet, TrendingUp } from "lucide-react";
 
 interface BalanceCardProps {
-  balance: number;
-  balanceUsd: number;
-  tokenPrice: number;
+  balance: string;
+  balanceUsd: number | null;
+  tokenPrice: number | null;
+  priceUnavailable?: boolean;
   chain: {
     id: string;
     name: string;
@@ -13,40 +14,48 @@ interface BalanceCardProps {
   };
 }
 
-export function BalanceCard({ balance, balanceUsd, tokenPrice, chain }: BalanceCardProps) {
-  const formattedBalance = balance.toLocaleString("en-US", {
+export function BalanceCard({
+  balance,
+  balanceUsd,
+  tokenPrice,
+  priceUnavailable,
+  chain,
+}: BalanceCardProps) {
+  const formattedBalance = Number(balance).toLocaleString("en-US", {
     minimumFractionDigits: 4,
-    maximumFractionDigits: 4,
+    maximumFractionDigits: 6,
   });
 
-  const formattedUsd = balanceUsd.toLocaleString("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+  const formattedUsd =
+    balanceUsd == null
+      ? "Price unavailable"
+      : balanceUsd.toLocaleString("en-US", {
+          style: "currency",
+          currency: "USD",
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        });
 
-  const formattedPrice = tokenPrice.toLocaleString("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+  const formattedPrice =
+    tokenPrice == null
+      ? "—"
+      : tokenPrice.toLocaleString("en-US", {
+          style: "currency",
+          currency: "USD",
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        });
 
   return (
     <div className="relative overflow-hidden rounded-xl border border-border bg-card p-6">
-      {/* Subtle gradient overlay */}
-      <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent pointer-events-none" />
-      
+      <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent pointer-events-none" />
       <div className="relative">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <div className="p-2.5 rounded-lg bg-primary/10">
               <Wallet className="h-5 w-5 text-primary" />
             </div>
-            <span className="text-sm font-medium text-muted-foreground">
-              {chain.symbol} Balance
-            </span>
+            <span className="text-sm font-medium text-muted-foreground">Available balance</span>
           </div>
           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-secondary text-xs text-muted-foreground">
             <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
@@ -55,20 +64,17 @@ export function BalanceCard({ balance, balanceUsd, tokenPrice, chain }: BalanceC
         </div>
 
         <div className="flex items-baseline gap-2 mb-2">
-          <span className="text-4xl font-bold text-foreground tracking-tight">
-            {formattedBalance}
-          </span>
-          <span className="text-lg font-medium text-muted-foreground">{chain.symbol}</span>
+          <span className="text-4xl font-bold text-foreground tracking-tight">{formattedUsd}</span>
         </div>
-
-        <div className="flex items-center gap-2 text-2xl font-semibold text-primary">
-          {formattedUsd}
+        <div className="text-lg font-medium text-muted-foreground mb-4">
+          {formattedBalance} {chain.symbol}
         </div>
-
-        <div className="mt-4 pt-4 border-t border-border flex items-center gap-2 text-sm text-muted-foreground">
-          <TrendingUp className="h-4 w-4" />
-          <span>1 {chain.symbol} = {formattedPrice}</span>
-        </div>
+        {!priceUnavailable && (
+          <div className="pt-4 border-t border-border flex items-center gap-2 text-sm text-muted-foreground">
+            <TrendingUp className="h-4 w-4" />
+            <span>1 {chain.symbol} = {formattedPrice}</span>
+          </div>
+        )}
       </div>
     </div>
   );
