@@ -1,247 +1,201 @@
 import { NextRequest, NextResponse } from "next/server";
+import { formatEther } from "viem";
+import { parseWalletAddress } from "@/lib/address";
+import { alchemyUrl, getChain, isChainId } from "@/lib/chains";
+import { getCached, rateLimit, setCached } from "@/lib/rate-limit";
 
-const ALCHEMY_API_KEY = process.env.ALCHEMY_API_KEY;
-
-// Supported chains with their Alchemy network URLs and native tokens
-export const SUPPORTED_CHAINS = {
-  ethereum: {
-    name: "Ethereum",
-    symbol: "ETH",
-    alchemyUrl: `https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`,
-    explorer: "https://etherscan.io",
-    coingeckoId: "ethereum",
-  },
-  polygon: {
-    name: "Polygon",
-    symbol: "MATIC",
-    alchemyUrl: `https://polygon-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`,
-    explorer: "https://polygonscan.com",
-    coingeckoId: "matic-network",
-  },
-  arbitrum: {
-    name: "Arbitrum",
-    symbol: "ETH",
-    alchemyUrl: `https://arb-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`,
-    explorer: "https://arbiscan.io",
-    coingeckoId: "ethereum",
-  },
-  optimism: {
-    name: "Optimism",
-    symbol: "ETH",
-    alchemyUrl: `https://opt-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`,
-    explorer: "https://optimistic.etherscan.io",
-    coingeckoId: "ethereum",
-  },
-  base: {
-    name: "Base",
-    symbol: "ETH",
-    alchemyUrl: `https://base-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`,
-    explorer: "https://basescan.org",
-    coingeckoId: "ethereum",
-  },
-} as const;
-
-export type ChainId = keyof typeof SUPPORTED_CHAINS;
-
-function isValidEthereumAddress(address: string): boolean {
-  return /^0x[a-fA-F0-9]{40}$/.test(address);
-}
-
-async function getTokenPrice(coingeckoId: string): Promise<number> {
-  try {
-    const response = await fetch(
-      `https://api.coingecko.com/api/v3/simple/price?ids=${coingeckoId}&vs_currencies=usd`,
-      { next: { revalidate: 60 } } // Cache for 60 seconds
-    );
-    const data = await response.json();
-    return data[coingeckoId]?.usd || 0;
-  } catch {
-    return 0;
-  }
-}
-
-async function getBalance(address: string, alchemyUrl: string): Promise<number> {
-  const response = await fetch(alchemyUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      jsonrpc: "2.0",
-      id: 1,
-      method: "eth_getBalance",
-      params: [address, "latest"],
-    }),
-  });
-
-  const data = await response.json();
-  
-  if (data.error) {
-    throw new Error(data.error.message);
-  }
-
-  const balanceWei = BigInt(data.result);
-  const balanceEth = Number(balanceWei) / 1e18;
-  return balanceEth;
-}
-
-interface AlchemyTransfer {
-  hash: string;
-  from: string;
-  to: string | null;
-  value: number | null;
-  metadata: {
-    blockTimestamp: string;
-  };
-}
-
-interface Transaction {
+export type Transaction = {
   hash: string;
   from: string;
   to: string;
   value: string;
+  asset: string;
+  category: string;
+  uniqueId: string;
   time: string;
+};
+
+export type WalletPayload = {
+  address: string;
+  balance: string;
+  balanceUsd: number | null;
+  tokenPrice: number | null;
+  priceUnavailable: boolean;
+  transactions: Transaction[];
+  chain: {
+    id: string;
+    name: string;
+    symbol: string;
+    explorer: string;
+  };
+};
+
+type AlchemyTransfer = {
+  uniqueId?: string;
+  hash: string;
+  from: string;
+  to: string | null;
+  value: number | null;
+  asset?: string | null;
+  category?: string;
+  metadata?: { blockTimestamp?: string };
+};
+
+async function readJson(response: Response) {
+  if (!response.ok) {
+    throw new Error(`Upstream ${response.status}`);
+  }
+  return response.json();
 }
 
-async function getTransactions(address: string, alchemyUrl: string): Promise<Transaction[]> {
-  const [incomingResponse, outgoingResponse] = await Promise.all([
-    fetch(alchemyUrl, {
+async function getTokenPrice(coingeckoId: string): Promise<number | null> {
+  const cacheKey = `price:${coingeckoId}`;
+  const cached = getCached<number>(cacheKey);
+  if (cached != null) return cached;
+
+  const response = await fetch(
+    `https://api.coingecko.com/api/v3/simple/price?ids=${coingeckoId}&vs_currencies=usd`,
+    { next: { revalidate: 60 } }
+  );
+  if (!response.ok) return null;
+  const data = await response.json();
+  const price = data?.[coingeckoId]?.usd;
+  if (typeof price !== "number") return null;
+  setCached(cacheKey, price, 60_000);
+  return price;
+}
+
+async function getBalance(address: string, url: string): Promise<string> {
+  const data = await readJson(
+    await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         jsonrpc: "2.0",
         id: 1,
-        method: "alchemy_getAssetTransfers",
-        params: [
-          {
-            fromBlock: "0x0",
-            toBlock: "latest",
-            toAddress: address,
-            category: ["external", "internal"],
-            maxCount: "0x10",
-            order: "desc",
-            withMetadata: true,
-          },
-        ],
+        method: "eth_getBalance",
+        params: [address, "latest"],
       }),
-    }),
-    fetch(alchemyUrl, {
+    })
+  );
+  if (data.error) throw new Error(data.error.message ?? "Balance lookup failed");
+  return formatEther(BigInt(data.result));
+}
+
+async function getTransfers(address: string, url: string, direction: "from" | "to") {
+  const params: Record<string, unknown> = {
+    fromBlock: "0x0",
+    toBlock: "latest",
+    category: ["external", "internal", "erc20"],
+    maxCount: "0x14",
+    order: "desc",
+    withMetadata: true,
+    excludeZeroValue: false,
+  };
+  if (direction === "from") params.fromAddress = address;
+  else params.toAddress = address;
+
+  const data = await readJson(
+    await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         jsonrpc: "2.0",
-        id: 2,
+        id: direction === "from" ? 2 : 1,
         method: "alchemy_getAssetTransfers",
-        params: [
-          {
-            fromBlock: "0x0",
-            toBlock: "latest",
-            fromAddress: address,
-            category: ["external", "internal"],
-            maxCount: "0x10",
-            order: "desc",
-            withMetadata: true,
-          },
-        ],
+        params: [params],
       }),
-    }),
-  ]);
+    })
+  );
+  if (data.error) throw new Error(data.error.message ?? "Transfer lookup failed");
+  return (data.result?.transfers ?? []) as AlchemyTransfer[];
+}
 
-  const [incomingData, outgoingData] = await Promise.all([
-    incomingResponse.json(),
-    outgoingResponse.json(),
-  ]);
+function mapTransfers(transfers: AlchemyTransfer[]): Transaction[] {
+  const seen = new Set<string>();
+  const mapped: Transaction[] = [];
 
-  const incomingTransfers: AlchemyTransfer[] = incomingData.result?.transfers || [];
-  const outgoingTransfers: AlchemyTransfer[] = outgoingData.result?.transfers || [];
+  for (const transfer of transfers) {
+    const uniqueId = transfer.uniqueId || `${transfer.hash}:${transfer.category}:${transfer.from}:${transfer.to}:${transfer.asset}`;
+    if (seen.has(uniqueId)) continue;
+    seen.add(uniqueId);
+    mapped.push({
+      hash: transfer.hash,
+      from: transfer.from,
+      to: transfer.to || "Contract Creation",
+      value: transfer.value == null ? "0" : String(transfer.value),
+      asset: transfer.asset || "ETH",
+      category: transfer.category || "external",
+      uniqueId,
+      time: transfer.metadata?.blockTimestamp || new Date().toISOString(),
+    });
+  }
 
-  const allTransfers = [...incomingTransfers, ...outgoingTransfers];
-
-  const uniqueTransfers = allTransfers.reduce((acc, transfer) => {
-    if (!acc.find((t) => t.hash === transfer.hash)) {
-      acc.push(transfer);
-    }
-    return acc;
-  }, [] as AlchemyTransfer[]);
-
-  const sortedTransfers = uniqueTransfers
-    .sort(
-      (a, b) =>
-        new Date(b.metadata.blockTimestamp).getTime() -
-        new Date(a.metadata.blockTimestamp).getTime()
-    )
-    .slice(0, 10);
-
-  return sortedTransfers.map((transfer) => ({
-    hash: transfer.hash,
-    from: transfer.from,
-    to: transfer.to || "Contract Creation",
-    value: transfer.value?.toFixed(6) || "0",
-    time: transfer.metadata.blockTimestamp,
-  }));
+  return mapped
+    .sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime())
+    .slice(0, 20);
 }
 
 export async function GET(request: NextRequest) {
-  const searchParams = request.nextUrl.searchParams;
-  const address = searchParams.get("address");
-  const chainParam = searchParams.get("chain") || "ethereum";
-  const chain = chainParam as ChainId;
+  const apiKey = process.env.ALCHEMY_API_KEY;
+  if (!apiKey) {
+    return NextResponse.json({ error: "Wallet data is temporarily unavailable." }, { status: 500 });
+  }
 
-  if (!ALCHEMY_API_KEY) {
+  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  const limited = rateLimit(`wallet:${ip}`);
+  if (!limited.ok) {
     return NextResponse.json(
-      { error: "Alchemy API key not configured" },
-      { status: 500 }
+      { error: "Too many requests. Try again shortly." },
+      { status: 429, headers: { "Retry-After": String(Math.ceil((limited.retryAfterMs || 1000) / 1000)) } }
     );
   }
+
+  const address = parseWalletAddress(request.nextUrl.searchParams.get("address"));
+  const chainParam = request.nextUrl.searchParams.get("chain") || "ethereum";
 
   if (!address) {
-    return NextResponse.json(
-      { error: "Address parameter is required" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "Enter a valid Ethereum address." }, { status: 400 });
+  }
+  if (!isChainId(chainParam)) {
+    return NextResponse.json({ error: "Unsupported chain." }, { status: 400 });
   }
 
-  if (!isValidEthereumAddress(address)) {
-    return NextResponse.json(
-      { error: "Invalid Ethereum address format" },
-      { status: 400 }
-    );
-  }
+  const cacheKey = `wallet:${chainParam}:${address.toLowerCase()}`;
+  const cached = getCached<WalletPayload>(cacheKey);
+  if (cached) return NextResponse.json(cached);
 
-  if (!SUPPORTED_CHAINS[chain]) {
-    return NextResponse.json(
-      { error: "Unsupported chain" },
-      { status: 400 }
-    );
-  }
-
-  const chainConfig = SUPPORTED_CHAINS[chain];
+  const chain = getChain(chainParam);
+  const url = alchemyUrl(chain.alchemyNetwork, apiKey);
 
   try {
-    const [balance, transactions, tokenPrice] = await Promise.all([
-      getBalance(address, chainConfig.alchemyUrl),
-      getTransactions(address, chainConfig.alchemyUrl),
-      getTokenPrice(chainConfig.coingeckoId),
+    const [balance, incoming, outgoing, tokenPrice] = await Promise.all([
+      getBalance(address, url),
+      getTransfers(address, url, "to"),
+      getTransfers(address, url, "from"),
+      getTokenPrice(chain.coingeckoId),
     ]);
 
-    const balanceUsd = balance * tokenPrice;
-
-    return NextResponse.json({
+    const balanceNumber = Number(balance);
+    const payload: WalletPayload = {
       address,
       balance,
-      balanceUsd,
+      balanceUsd: tokenPrice == null ? null : balanceNumber * tokenPrice,
       tokenPrice,
-      transactions,
+      priceUnavailable: tokenPrice == null,
+      transactions: mapTransfers([...incoming, ...outgoing]),
       chain: {
-        id: chain,
-        name: chainConfig.name,
-        symbol: chainConfig.symbol,
-        explorer: chainConfig.explorer,
+        id: chain.id,
+        name: chain.name,
+        symbol: chain.symbol,
+        explorer: chain.explorer,
       },
-    });
+    };
+
+    setCached(cacheKey, payload, 25_000);
+    return NextResponse.json(payload);
   } catch (error) {
     console.error("Error fetching wallet data:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch wallet data. Please try again." },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to fetch wallet data. Please try again." }, { status: 500 });
   }
 }
