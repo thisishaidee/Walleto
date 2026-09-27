@@ -81,12 +81,17 @@ async function getBalance(address: string, url: string): Promise<string> {
   return formatEther(BigInt(data.result));
 }
 
-async function getTransfers(address: string, url: string, direction: "from" | "to") {
+async function alchemyTransfers(
+  address: string,
+  url: string,
+  direction: "from" | "to",
+  category: string[]
+) {
   const params: Record<string, unknown> = {
     fromBlock: "0x0",
     toBlock: "latest",
-    category: ["external", "internal", "erc20"],
-    maxCount: "0x14",
+    category,
+    maxCount: "0x64",
     order: "desc",
     withMetadata: true,
     excludeZeroValue: false,
@@ -100,7 +105,7 @@ async function getTransfers(address: string, url: string, direction: "from" | "t
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         jsonrpc: "2.0",
-        id: direction === "from" ? 2 : 1,
+        id: 1,
         method: "alchemy_getAssetTransfers",
         params: [params],
       }),
@@ -110,12 +115,25 @@ async function getTransfers(address: string, url: string, direction: "from" | "t
   return (data.result?.transfers ?? []) as AlchemyTransfer[];
 }
 
-function mapTransfers(transfers: AlchemyTransfer[]): Transaction[] {
+async function getTransfers(address: string, url: string) {
+  const [inNative, outNative, inToken, outToken] = await Promise.all([
+    alchemyTransfers(address, url, "to", ["external", "internal"]),
+    alchemyTransfers(address, url, "from", ["external", "internal"]),
+    alchemyTransfers(address, url, "to", ["erc20"]),
+    alchemyTransfers(address, url, "from", ["erc20"]),
+  ]);
+  return [...inNative, ...outNative, ...inToken, ...outToken];
+}
+
+function mapTransfers(transfers: AlchemyTransfer[], fallbackSymbol: string): Transaction[] {
   const seen = new Set<string>();
   const mapped: Transaction[] = [];
 
   for (const transfer of transfers) {
-    const uniqueId = transfer.uniqueId || `${transfer.hash}:${transfer.category}:${transfer.from}:${transfer.to}:${transfer.asset}`;
+    if (!transfer.hash) continue;
+    const uniqueId =
+      transfer.uniqueId ||
+      `${transfer.hash}:${transfer.category}:${transfer.from}:${transfer.to}:${transfer.asset}`;
     if (seen.has(uniqueId)) continue;
     seen.add(uniqueId);
     mapped.push({
@@ -123,22 +141,29 @@ function mapTransfers(transfers: AlchemyTransfer[]): Transaction[] {
       from: transfer.from,
       to: transfer.to || "Contract Creation",
       value: transfer.value == null ? "0" : String(transfer.value),
-      asset: transfer.asset || "ETH",
+      asset: transfer.asset || fallbackSymbol,
       category: transfer.category || "external",
       uniqueId,
-      time: transfer.metadata?.blockTimestamp || new Date().toISOString(),
+      time: transfer.metadata?.blockTimestamp || "",
     });
   }
 
   return mapped
-    .sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime())
-    .slice(0, 20);
+    .sort((a, b) => {
+      const ta = a.time ? new Date(a.time).getTime() : 0;
+      const tb = b.time ? new Date(b.time).getTime() : 0;
+      return tb - ta;
+    })
+    .slice(0, 40);
 }
 
 export async function GET(request: NextRequest) {
   const apiKey = process.env.ALCHEMY_API_KEY;
   if (!apiKey) {
-    return NextResponse.json({ error: "Wallet data is temporarily unavailable." }, { status: 500 });
+    return NextResponse.json(
+      { error: "Alchemy key is not set on this deployment. Add ALCHEMY_API_KEY in Vercel." },
+      { status: 500 }
+    );
   }
 
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
@@ -168,10 +193,9 @@ export async function GET(request: NextRequest) {
   const url = alchemyUrl(chain.alchemyNetwork, apiKey);
 
   try {
-    const [balance, incoming, outgoing, tokenPrice] = await Promise.all([
+    const [balance, transfers, tokenPrice] = await Promise.all([
       getBalance(address, url),
-      getTransfers(address, url, "to"),
-      getTransfers(address, url, "from"),
+      getTransfers(address, url),
       getTokenPrice(chain.coingeckoId),
     ]);
 
@@ -182,7 +206,7 @@ export async function GET(request: NextRequest) {
       balanceUsd: tokenPrice == null ? null : balanceNumber * tokenPrice,
       tokenPrice,
       priceUnavailable: tokenPrice == null,
-      transactions: mapTransfers([...incoming, ...outgoing]),
+      transactions: mapTransfers(transfers, chain.symbol),
       chain: {
         id: chain.id,
         name: chain.name,
@@ -191,10 +215,15 @@ export async function GET(request: NextRequest) {
       },
     };
 
-    setCached(cacheKey, payload, 25_000);
+    setCached(cacheKey, payload, 15_000);
     return NextResponse.json(payload);
   } catch (error) {
     console.error("Error fetching wallet data:", error);
-    return NextResponse.json({ error: "Failed to fetch wallet data. Please try again." }, { status: 500 });
+    return NextResponse.json(
+      {
+        error: `Could not load ${chain.name}. Enable this network on your Alchemy app, then try again.`,
+      },
+      { status: 500 }
+    );
   }
 }

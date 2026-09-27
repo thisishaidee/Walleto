@@ -18,6 +18,40 @@ interface TransactionListProps {
   symbol?: string;
 }
 
+function formatWhen(time: string) {
+  if (!time) return "Time unknown";
+  const date = new Date(time);
+  if (Number.isNaN(date.getTime())) return "Time unknown";
+
+  const now = new Date();
+  const sameDay =
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate();
+
+  const clock = date.toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+
+  if (sameDay) return `Today, ${clock}`;
+
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  const isYesterday =
+    date.getFullYear() === yesterday.getFullYear() &&
+    date.getMonth() === yesterday.getMonth() &&
+    date.getDate() === yesterday.getDate();
+  if (isYesterday) return `Yesterday, ${clock}`;
+
+  return date.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 export function TransactionList({
   transactions,
   walletAddress,
@@ -35,20 +69,11 @@ export function TransactionList({
     return `${num.toLocaleString("en-US", { maximumFractionDigits: 4 })} ${ticker}`;
   };
 
-  const formatTime = (time: string) => {
-    const date = new Date(time);
-    return date.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
-
   if (transactions.length === 0) {
     return (
       <div className="rounded-xl border border-border bg-card p-8 text-center">
-        <p className="text-muted-foreground">No transactions found</p>
+        <p className="text-muted-foreground">No transactions found on this chain</p>
+        <p className="text-xs text-muted-foreground mt-2">Switch the chain in the header if the transfer was on another network.</p>
       </div>
     );
   }
@@ -57,7 +82,7 @@ export function TransactionList({
     <div className="rounded-xl border border-border bg-card overflow-hidden">
       <div className="p-4 border-b border-border">
         <h2 className="text-lg font-semibold text-foreground">Recent transactions</h2>
-        <p className="text-sm text-muted-foreground mt-1">Native and ERC-20 · last {transactions.length}</p>
+        <p className="text-sm text-muted-foreground mt-1">Newest first · native and ERC-20</p>
       </div>
       <div className="divide-y divide-border">
         {transactions.map((tx) => {
@@ -69,18 +94,18 @@ export function TransactionList({
                   {isOutgoing ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownLeft className="h-4 w-4" />}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center justify-between gap-2">
                     <span className="text-sm font-medium text-foreground">{isOutgoing ? "Sent" : "Received"}</span>
                     <span className={`text-sm font-semibold ${isOutgoing ? "text-destructive" : "text-primary"}`}>
                       {isOutgoing ? "-" : "+"}{formatValue(tx.value, tx.asset)}
                     </span>
                   </div>
-                  <div className="mt-1.5 flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 text-xs text-muted-foreground">
+                  <div className="mt-1.5 flex flex-col gap-1 text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground/70">{formatWhen(tx.time)}</span>
                     <span className="font-mono">
                       {isOutgoing ? "To: " : "From: "}
                       {truncateAddress(isOutgoing ? tx.to : tx.from)}
                     </span>
-                    <span>{formatTime(tx.time)}</span>
                   </div>
                   <div className="mt-2 flex items-center gap-2">
                     <span className="font-mono text-xs text-muted-foreground">{truncateHash(tx.hash)}</span>
