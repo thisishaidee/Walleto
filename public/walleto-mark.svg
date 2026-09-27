@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Walleto">
+  <rect width="256" height="256" fill="#F3EEE6"/>
+  <g transform="translate(56 68)">
+    <path d="M0 0 L72 0 L0 88 Z" fill="#C9B6E4"/>
+    <path d="M8 28 L86 0 L62 120 L0 120 Z" fill="#D4C4EE"/>
+    <path d="M28 120 L44 120 L78 8 L70 0 L22 112 Z" fill="#F3EEE6"/>
+    <path d="M70 8 L112 120 L86 120 L54 28 Z" fill="#B59BD6"/>
+    <path d="M96 28 L144 0 L144 120 L80 120 Z" fill="#6B4BA3"/>
+    <path d="M108 0 L144 0 L144 52 Z" fill="#7A58B0"/>
+    <path d="M96 28 L144 52 L144 120 L80 120 Z" fill="#5C3E96"/>
+  </g>
+</svg>

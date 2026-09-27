@@ -1,33 +1,20 @@
-# v0-evm-wallet-tracker
+# walleto
 
-This is a [Next.js](https://nextjs.org) project bootstrapped with [v0](https://v0.app).
+Read-only EVM wallet tracker. Native balances, USD price, and recent native + ERC-20 transfers on Ethereum, Polygon, Arbitrum, Optimism, and Base.
 
-## Built with v0
+No private keys. No send. No swap.
 
-This repository is linked to a [v0](https://v0.app) project. You can continue developing by visiting the link below -- start new chats to make changes, and v0 will push commits directly to this repo. Every merge to `main` will automatically deploy.
-
-[Continue working on v0 →](https://v0.app/chat/projects/prj_pQuj87T1el8VdCqu7hbV3RHXy9X2)
-
-## Getting Started
-
-First, run the development server:
+## Setup
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+pnpm install
+cp .env.example .env.local
+```
+
+Add your Alchemy key to `.env.local` as `ALCHEMY_API_KEY`. Never commit it.
+
+```bash
 pnpm dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-## Learn More
-
-To learn more, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-- [v0 Documentation](https://v0.app/docs) - learn about v0 and how to use it.
+On Vercel, set `ALCHEMY_API_KEY` under Project Settings → Environment Variables (Production + Preview).

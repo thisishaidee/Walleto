@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Search, Loader2 } from "lucide-react";
+import { parseWalletAddress } from "@/lib/address";
 
 export function SearchBar() {
   const [address, setAddress] = useState("");
@@ -10,28 +11,20 @@ export function SearchBar() {
   const [error, setError] = useState("");
   const router = useRouter();
 
-  const isValidAddress = (addr: string) => {
-    return /^0x[a-fA-F0-9]{40}$/.test(addr);
-  };
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-
-    const trimmedAddress = address.trim();
-
-    if (!trimmedAddress) {
+    const parsed = parseWalletAddress(address);
+    if (!address.trim()) {
       setError("Please enter a wallet address");
       return;
     }
-
-    if (!isValidAddress(trimmedAddress)) {
-      setError("Invalid Ethereum address format");
+    if (!parsed) {
+      setError("Invalid Ethereum address");
       return;
     }
-
     setIsLoading(true);
-    router.push(`/wallet/${trimmedAddress}`);
+    router.push(`/wallet/${parsed}?chain=ethereum`);
   };
 
   return (
